@@ -56,6 +56,10 @@ float pinvoltage;
 #define V 1
 #define Time 1
 
+//i2c internal functions
+#define external_i2c 1
+//#define ahe_debug 1 //debug for i2c internal data
+
 #ifdef RTD
 Adafruit_MAX31865 max = Adafruit_MAX31865(3);
 float RREF = 4300.0;
@@ -67,15 +71,25 @@ File DataFile;    // File name the code will know to write to
 File APRSFile;
 #endif
 
+//ahe - global i2c variables
+char i2c_data[20];
+int i2c_valid;
+int i2c_cnt = 0;
+
 void setup() {
 
-  Wire.begin(0x55); // Initialize I2C (Slave Mode: address=0x55 )
-  Wire.onReceive(I2C_RxHandler);
-  Wire.onRequest(I2C_TxHandler);
+
 
   init_io();
-  Serial.begin(9600);
+  Serial.begin(57600); //changed to match BT debugging
   Serial.println("PHaT - Start");
+
+
+  //ahe added function calls for i2c start
+  #ifdef external_i2c
+      Wire.begin(8);                // join i2c bus with address #8
+      Wire.onReceive(receiveEvent); // register event
+  #endif
 
   #ifdef RTD
     max.begin(MAX31865_3WIRE);
@@ -178,6 +192,7 @@ void setup() {
       digitalWrite(A3, LOW);
     }
   #endif
+
 }
 
 void loop() {
@@ -319,4 +334,14 @@ void loop() {
   #ifdef sd
     DataFile.close();
   #endif
+
+  //ahe - i2c
+  if(i2c_valid==1){
+      Serial.print("i2c data:");
+      Serial.println(i2c_data);
+
+      //dump the data to a file - add function calls to do that
+
+      i2c_valid = 0;
+  }
 }

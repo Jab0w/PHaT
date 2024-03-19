@@ -73,6 +73,7 @@ unsigned int SumArray(int Error[]) {
   return sum; 
 }
 
+//justin's i2c functions
 void I2C_RxHandler(int numBytes)
 {
   RxByte = Wire.read();
@@ -90,7 +91,3 @@ void I2C_RxHandler(int numBytes)
   }
 }
 
-void I2C_TxHandler(void)
-{
-  Wire.write(TxByte);
-}
