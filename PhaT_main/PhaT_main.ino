@@ -76,6 +76,17 @@ char i2c_data[20];
 int i2c_valid;
 int i2c_cnt = 0;
 
+char i2c_file_data[70];
+
+// GPS data handelling 
+// ahe
+char GPS_str[50];  //<time>,<lon>,<lat>
+char *gps_data = GPS_str;
+int gps_valid_cmd = 0;
+int gps_valid_data = 0;
+
+
+
 void setup() {
 
 
@@ -329,6 +340,18 @@ void loop() {
   for (int i=0 ; i<=15; i++){
     DataFile.print(Flag[i]);
   }
+
+  //ahe
+  //add GPS data
+
+  if(gps_valid_data==1){
+    DataFile.print(GPS_str);
+    gps_valid_data = 0;
+  }else{
+    DataFile.print(",,");
+  }
+
+  //New line to end data
     DataFile.println("");
   ////////////
   #ifdef sd
@@ -336,12 +359,15 @@ void loop() {
   #endif
 
   //ahe - i2c
-  if(i2c_valid==1){
+  if(i2c_valid==1 & gps_valid_cmd==1){
       Serial.print("i2c data:");
-      Serial.println(i2c_data);
+      sprintf(i2c_file_data,"%s,%s",i2c_data,GPS_str);
+      Serial.println(i2c_file_data);
 
       //dump the data to a file - add function calls to do that
 
+      
+      gps_valid_cmd = 0;
       i2c_valid = 0;
   }
 }
