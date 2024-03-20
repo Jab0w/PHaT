@@ -121,21 +121,22 @@ void setup() {
     Serial.println("PHaT - 2");
 
     for(int i=0;i<8;i++){
-    unsigned short a = 0xA0+i*2;
-    digitalWrite(5, LOW);
-    delayMicroseconds(50);
-    SPI.transfer(a);
-    n_prom[i] = SPI.transfer16(0x00);
-    delayMicroseconds(50);
-    digitalWrite(5, HIGH);
-    SPI.endTransaction();
-    delay(1);
+      unsigned short a = 0xA0+i*2;
+      digitalWrite(5, LOW);
+      delayMicroseconds(50);
+      SPI.transfer(a);
+      n_prom[i] = SPI.transfer16(0x00);
+      delayMicroseconds(50);
+      digitalWrite(5, HIGH);
+      SPI.endTransaction();
+      delay(1);
 
     }
 
     n_rem = crc4(n_prom);
     if (n_rem != 15){
       Error[0] = 1;
+      Serial.println(n_rem);
     }
   #endif
 
@@ -190,16 +191,16 @@ void setup() {
     if (ErrorSum > 0){
       Serial.println("PHaT - 7");
       digitalWrite(A3, HIGH);
-      delay(20);
+      delay(1000);
       digitalWrite(A3, LOW);
     } else {
       Serial.println("PHaT - 8");
       digitalWrite(A3, HIGH);
-      delay(20);
+      delay(80);
       digitalWrite(A3, LOW);
-      delay(20);
+      delay(80);
       digitalWrite(A3, HIGH);
-      delay(20);
+      delay(80);
       digitalWrite(A3, LOW);
     }
   #endif
@@ -275,12 +276,12 @@ void loop() {
       SPI.endTransaction();
       delay(1);
     }
-    Serial.print("1 : ");
-    Serial.println(P_Data1);
-    Serial.print("2 : ");
-    Serial.println(P_Data2);
-    Serial.print("3 : ");
-    Serial.println(P_Data3);
+    //Serial.print("1 : ");
+    //Serial.println(P_Data1);
+    //Serial.print("2 : ");
+    //Serial.println(P_Data2);
+    //Serial.print("3 : ");
+    //Serial.println(P_Data3);
     DataFile.print(", ");
     DataFile.print("N/A");
     DataFile.print(", ");
@@ -332,6 +333,9 @@ void loop() {
     digitalWrite(A1, LOW);
     if (voltage<6.5){
       Flag[6] = 1;
+      digitalWrite(A3, HIGH);
+      delay(80);
+      digitalWrite(A3, LOW);
     }
   #endif
   //Serial.println(count);
