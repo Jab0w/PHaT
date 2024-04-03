@@ -58,7 +58,9 @@ float pinvoltage;
 
 //i2c internal functions
 #define external_i2c 1
-//#define ahe_debug 1 //debug for i2c internal data
+#define ahe_debug 1 //debug for i2c internal data
+#define ahe_gps 1 
+
 
 #ifdef RTD
 Adafruit_MAX31865 max = Adafruit_MAX31865(3);
@@ -80,10 +82,26 @@ char i2c_file_data[70];
 
 // GPS data handelling 
 // ahe
-char GPS_str[50];  //<time>,<lon>,<lat>
-char *gps_data = GPS_str;
+
+
 int gps_valid_cmd = 0;
-int gps_valid_data = 0;
+int gps_valid_data = 1;
+
+
+String inputString = "";  
+
+char Lat[] = "xxxx.xxxxxx";
+char Lon[] = "xxxxx.xxxxxxxx";
+char alt[] = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+char gps_data[150];
+
+char *gps_str = gps_data;
+int serial_indx = 0;
+bool stringComplete = false;  // whether the string is complete
+
+
+int msg_valid = 0;
+int cmd_cnt = 0;
 
 
 
@@ -94,7 +112,7 @@ void setup() {
   init_io();
   Serial.begin(57600); //changed to match BT debugging
   Serial.println("PHaT - Start");
-
+  inputString.reserve(100);
 
   //ahe added function calls for i2c start
   #ifdef external_i2c
@@ -207,167 +225,180 @@ void setup() {
 }
 
 void loop() {
-  #ifdef sd
-    DataFile = SD.open(FileName, FILE_WRITE);
-  #endif
 
-  /////////// Loop for RTD sensor //////////////
-  #ifdef RTD
-    //Serial.println("RTD Start");
-    float rtd = max.readRTD();
-    float ratio = rtd;
-    ratio /= 32768;
-    Ext_Temperature = max.temperature(1000, RREF);
+  // #ifdef sd
+  //   DataFile = SD.open(FileName, FILE_WRITE);
+  // #endif
 
-    //Serial.println(count);
-
-    digitalWrite(A2, HIGH);
-    DataFile.print(Ext_Temperature); //More accurate way to do this
-    digitalWrite(A2, LOW);
-
-  // loop for RH            // If battery lower than 6.5V the frequency starts to drop below 12KHz
-                                       // For all other battery power the frequency is stable at 12KHz
-  #ifdef RH
-    //Serial.println("RH Start");
-    count=0;
-    digitalWrite(A0, HIGH);
-    Serial.print("");  // This is needed before the delay for some reason. Not sure why, but if it's not there count is zero
-    delay(count_delay);
-    count_cap = count;
-    digitalWrite(A0, LOW);
-    //Serial.println(count_cap);
-    //Serial.println(RH_const);
-    //delay(1000);
-    c_humid = RH_const/count_cap;
-    RH_value = 30 + 0.909091 * (c_ref - c_humid);
-    Change_RH = (B5*RH_value+B2)*Ext_Temperature + (B3*RH_value+B4);
-    RH_value = RH_value + Change_RH;
-    //Serial.println(c_humid);
-    //Serial.println(RH_value);
-    DataFile.print(", ");
-    DataFile.print(count_cap);
-    DataFile.print(", ");
-    DataFile.print(RH_value); 
-
-  #endif
-
-  // Loop for Pressure Sensor
-  #ifdef PS
-    //Serial.println("PS Start");
-    for(int i=0;i<2;i++){
-      unsigned short a = 0x48+i*10;
-      digitalWrite(5, LOW);
-      delayMicroseconds(50);
-      SPI.transfer(a);
-      delay(9);
-      digitalWrite(5, HIGH);
-      delay(1);
-      digitalWrite(5, LOW);
-      delayMicroseconds(50);
-//      for(int j=0;j<3;j++){
-//        P_Data[i][j] = SPI.transfer(0x00);
-//      }
-      P_Data1 = SPI.transfer(0x00);
-      P_Data2 = SPI.transfer(0x00);
-      P_Data3 = SPI.transfer(0x00);
-      delayMicroseconds(50);
-      digitalWrite(5, HIGH);
-      SPI.endTransaction();
-      delay(1);
-    }
-    Serial.print("1 : ");
-    Serial.println(P_Data1);
-    Serial.print("2 : ");
-    Serial.println(P_Data2);
-    Serial.print("3 : ");
-    Serial.println(P_Data3);
-    DataFile.print(", ");
-    DataFile.print("N/A");
-    DataFile.print(", ");
-    DataFile.print("N/A");
-  #endif
-
-  // Loop for Time of Sample
-  #ifdef Time
-    //Serial.println("Time Start");
-    DataFile.print(", ");
-    DataFile.print("N/A");
-  #endif
-
-    // Check and print any faults
-    uint8_t fault = max.readFault();
-    if (fault) {
-      if (fault & MAX31865_FAULT_HIGHTHRESH) {
-        Flag[0] = 1; // Serial.println("RTD High Threshold"); 
-      }
-      if (fault & MAX31865_FAULT_LOWTHRESH) {
-        Flag[1] = 1; //Serial.println("RTD Low Threshold"); 
-      }
-      if (fault & MAX31865_FAULT_REFINLOW) {
-        Flag[2] = 1; //Serial.println("REFIN- > 0.85 x Bias"); 
-      }
-      if (fault & MAX31865_FAULT_REFINHIGH) {
-        Flag[3] = 1; //Serial.println("REFIN- < 0.85 x Bias - FORCE- open"); 
-      }
-      if (fault & MAX31865_FAULT_RTDINLOW) {
-        Flag[4] = 1; //Serial.println("RTDIN- < 0.85 x Bias - FORCE- open"); 
-      }
-      if (fault & MAX31865_FAULT_OVUV) {
-        Flag[5] = 1; //Serial.println("Under/Over voltage"); 
-      }
-      max.clearFault();
+  #ifdef ahe_gps
+    if(stringComplete){
+      Serial.println(inputString);
+      // serial GPS raw data is available here
+      inputString = "";
+      stringComplete = false;
     }
   #endif
+  delay(100);
+//   /////////// Loop for RTD sensor //////////////
+//   #ifdef RTD
+//     //Serial.println("RTD Start");
+//     float rtd = max.readRTD();
+//     float ratio = rtd;
+//     ratio /= 32768;
+//     Ext_Temperature = max.temperature(1000, RREF);
 
-  // Check Battery Voltage
-  #ifdef V
-    //Serial.println("Voltage Start");
-    voltage = analogRead(A7) * calibrationFactor;     // Voltage can be read down to a battery power of 6.5 V
-    pinvoltage = analogRead(A7) * 0.00488;
-    digitalWrite(A1, HIGH);
-    DataFile.print(", ");
-    DataFile.print(voltage);
-    DataFile.print(", ");
-    DataFile.print(pinvoltage);
-    digitalWrite(A1, LOW);
-    if (voltage<6.5){
-      Flag[6] = 1;
-    }
-  #endif
-  //Serial.println(count);
-  //Serial.println("Flag Start");
-  DataFile.print(", ");
-  for (int i=0 ; i<=15; i++){
-    DataFile.print(Flag[i]);
-  }
+//     //Serial.println(count);
 
-  //ahe
-  //add GPS data
+//     digitalWrite(A2, HIGH);
+//     DataFile.print(Ext_Temperature); //More accurate way to do this
+//     digitalWrite(A2, LOW);
 
-  if(gps_valid_data==1){
-    DataFile.print(GPS_str);
-    gps_valid_data = 0;
-  }else{
-    DataFile.print(",,");
-  }
+//   #endif
+//   // loop for RH            // If battery lower than 6.5V the frequency starts to drop below 12KHz
+//                                        // For all other battery power the frequency is stable at 12KHz
+//   #ifdef RH
+//     //Serial.println("RH Start");
+//     count=0;
+//     digitalWrite(A0, HIGH);
+//     Serial.print("");  // This is needed before the delay for some reason. Not sure why, but if it's not there count is zero
+//     delay(count_delay);
+//     count_cap = count;
+//     digitalWrite(A0, LOW);
+//     //Serial.println(count_cap);
+//     //Serial.println(RH_const);
+//     //delay(1000);
+//     c_humid = RH_const/count_cap;
+//     RH_value = 30 + 0.909091 * (c_ref - c_humid);
+//     Change_RH = (B5*RH_value+B2)*Ext_Temperature + (B3*RH_value+B4);
+//     RH_value = RH_value + Change_RH;
+//     //Serial.println(c_humid);
+//     //Serial.println(RH_value);
+//     DataFile.print(", ");
+//     DataFile.print(count_cap);
+//     DataFile.print(", ");
+//     DataFile.print(RH_value); 
 
-  //New line to end data
-    DataFile.println("");
-  ////////////
-  #ifdef sd
-    DataFile.close();
-  #endif
+//   #endif
+
+//   // Loop for Pressure Sensor
+//   #ifdef PS
+//     //Serial.println("PS Start");
+//     for(int i=0;i<2;i++){
+//       unsigned short a = 0x48+i*10;
+//       digitalWrite(5, LOW);
+//       delayMicroseconds(50);
+//       SPI.transfer(a);
+//       delay(9);
+//       digitalWrite(5, HIGH);
+//       delay(1);
+//       digitalWrite(5, LOW);
+//       delayMicroseconds(50);
+// //      for(int j=0;j<3;j++){
+// //        P_Data[i][j] = SPI.transfer(0x00);
+// //      }
+//       P_Data1 = SPI.transfer(0x00);
+//       P_Data2 = SPI.transfer(0x00);
+//       P_Data3 = SPI.transfer(0x00);
+//       delayMicroseconds(50);
+//       digitalWrite(5, HIGH);
+//       SPI.endTransaction();
+//       delay(1);
+//     }
+//     /*Serial.print("1 : ");
+//     Serial.println(P_Data1);
+//     Serial.print("2 : ");
+//     Serial.println(P_Data2);
+//     Serial.print("3 : ");
+//     Serial.println(P_Data3);
+//     */
+//     DataFile.print(", ");
+//     DataFile.print("N/A");
+//     DataFile.print(", ");
+//     DataFile.print("N/A");
+//   #endif
+
+//   // Loop for Time of Sample
+//   #ifdef Time
+//     //Serial.println("Time Start");
+//     DataFile.print(", ");
+//     DataFile.print("N/A");
+//   #endif
+
+//     // Check and print any faults
+//     uint8_t fault = max.readFault();
+//     if (fault) {
+//       if (fault & MAX31865_FAULT_HIGHTHRESH) {
+//         Flag[0] = 1; // Serial.println("RTD High Threshold"); 
+//       }
+//       if (fault & MAX31865_FAULT_LOWTHRESH) {
+//         Flag[1] = 1; //Serial.println("RTD Low Threshold"); 
+//       }
+//       if (fault & MAX31865_FAULT_REFINLOW) {
+//         Flag[2] = 1; //Serial.println("REFIN- > 0.85 x Bias"); 
+//       }
+//       if (fault & MAX31865_FAULT_REFINHIGH) {
+//         Flag[3] = 1; //Serial.println("REFIN- < 0.85 x Bias - FORCE- open"); 
+//       }
+//       if (fault & MAX31865_FAULT_RTDINLOW) {
+//         Flag[4] = 1; //Serial.println("RTDIN- < 0.85 x Bias - FORCE- open"); 
+//       }
+//       if (fault & MAX31865_FAULT_OVUV) {
+//         Flag[5] = 1; //Serial.println("Under/Over voltage"); 
+//       }
+//       max.clearFault();
+//     }
+//   #endif
+
+//   // Check Battery Voltage
+//   #ifdef V
+//     //Serial.println("Voltage Start");
+//     voltage = analogRead(A7) * calibrationFactor;     // Voltage can be read down to a battery power of 6.5 V
+//     pinvoltage = analogRead(A7) * 0.00488;
+//     digitalWrite(A1, HIGH);
+//     DataFile.print(", ");
+//     DataFile.print(voltage);
+//     DataFile.print(", ");
+//     DataFile.print(pinvoltage);
+//     digitalWrite(A1, LOW);
+//     if (voltage<6.5){
+//       Flag[6] = 1;
+//     }
+//   #endif
+//   //Serial.println(count);
+//   //Serial.println("Flag Start");
+//   DataFile.print(", ");
+//   for (int i=0 ; i<=15; i++){
+//     DataFile.print(Flag[i]);
+//   }
+
+//   //ahe
+//   //add GPS data
+
+//   if(gps_valid_data==1){
+//     DataFile.print(gps_str);
+//     gps_valid_data = 0;
+//   }else{
+//     DataFile.print(",,");
+//   }
+
+//   //New line to end data
+//     DataFile.println("");
+//   ////////////
+//   #ifdef sd
+//     DataFile.close();
+//   #endif
 
   //ahe - i2c
-  if(i2c_valid==1 & gps_valid_cmd==1){
-      Serial.print("i2c data:");
-      sprintf(i2c_file_data,"%s,%s",i2c_data,GPS_str);
-      Serial.println(i2c_file_data);
+  // if(i2c_valid==1 ){
+  //     Serial.print("i2c data:");
+  //     sprintf(i2c_file_data,"%s,%s",i2c_data,GPS_str);
+  //     Serial.println(i2c_file_data);
 
-      //dump the data to a file - add function calls to do that
+  //     //dump the data to a file - add function calls to do that
 
       
-      gps_valid_cmd = 0;
-      i2c_valid = 0;
-  }
+  //     //remove GPS for basic testing
+  //     //gps_valid_cmd = 0;
+  //     i2c_valid = 0;
+  // }
 }
